@@ -117,14 +117,20 @@ async function run (): Promise<void> {
   const app = express()
   const clients = new Set<SseClient>()
 
-  const reader = new Redis(redisUrl, {
+  const redisOpts = {
     maxRetriesPerRequest: null,
     enableReadyCheck: true
-  })
+  } as const
 
-  reader.on('error', (err: Error) => {
-    console.error('[redis]', err.message)
-  })
+  /** Dedicated connection: XREAD BLOCK would stall any other command on the same socket. */
+  const redisBlocking = new Redis(redisUrl, redisOpts)
+  const redisCommands = redisBlocking.duplicate(redisOpts)
+
+  const logRedisErr = (label: string) => (err: Error) => {
+    console.error(`[redis ${label}]`, err.message)
+  }
+  redisBlocking.on('error', logRedisErr('blocking'))
+  redisCommands.on('error', logRedisErr('commands'))
 
   const publicDir = path.join(process.cwd(), 'public')
   app.use(express.static(publicDir))
@@ -154,7 +160,7 @@ async function run (): Promise<void> {
       try {
         if (historyCount > 0) {
           const items = await fetchRecentAcrossStreams(
-            reader,
+            redisCommands,
             streamKeys,
             historyCount
           )
@@ -197,7 +203,7 @@ async function run (): Promise<void> {
   for (;;) {
     try {
       type XReadReply = [string, [string, string[]][]][] | null
-      const raw = (await reader.call(
+      const raw = (await redisBlocking.call(
         'XREAD',
         'BLOCK',
         String(blockMs),

@@ -99,9 +99,32 @@
       .entry {
         border-bottom: 1px solid var(--border);
         padding: 0.6rem 0;
+        border-radius: 6px;
+        transition: box-shadow 0.2s ease, background-color 0.2s ease;
       }
       .entry:last-child {
         border-bottom: none;
+      }
+      @keyframes entryNewFlash {
+        0%,
+        100% {
+          box-shadow: none;
+          background-color: transparent;
+        }
+        50% {
+          box-shadow: 0 0 18px rgba(61, 156, 245, 0.45);
+          background-color: rgba(61, 156, 245, 0.09);
+        }
+      }
+      .entry--new {
+        animation: entryNewFlash 1s ease-in-out 5;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .entry--new {
+          animation: none;
+          outline: 2px solid var(--accent);
+          outline-offset: 2px;
+        }
       }
       .meta {
         color: var(--muted);
@@ -216,6 +239,12 @@
         if (logEl.querySelector('[data-stream-id="' + key + '"]')) return
 
         const wrap = createMessageEntryEl(obj)
+        wrap.classList.add('entry--new')
+        const stopFlash = () => {
+          wrap.classList.remove('entry--new')
+        }
+        wrap.addEventListener('animationend', stopFlash, { once: true })
+        window.setTimeout(stopFlash, 5200)
         logEl.insertBefore(wrap, logEl.firstChild)
       }
 

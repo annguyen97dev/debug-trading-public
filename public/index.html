@@ -143,6 +143,31 @@
         logEl.innerHTML = '<div class="empty">Cleared.</div>'
       })
 
+      /** ISO string → readable local time (hover meta for raw ISO). */
+      function formatEventTime(iso) {
+        if (!iso || typeof iso !== 'string') return String(iso ?? '')
+        const d = new Date(iso)
+        if (Number.isNaN(d.getTime())) return iso
+        try {
+          return new Intl.DateTimeFormat(undefined, {
+            weekday: 'short',
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            fractionalSecondDigits: 3,
+            timeZoneName: 'short'
+          }).format(d)
+        } catch {
+          return d.toLocaleString(undefined, {
+            dateStyle: 'medium',
+            timeStyle: 'medium'
+          })
+        }
+      }
+
       function createMessageEntryEl(obj) {
         const wrap = document.createElement('div')
         wrap.className = 'entry'
@@ -150,8 +175,9 @@
 
         const meta = document.createElement('div')
         meta.className = 'meta'
+        meta.title = 'ISO: ' + obj.receivedAt
         meta.textContent =
-          obj.receivedAt +
+          formatEventTime(obj.receivedAt) +
           ' | ' +
           obj.stream +
           ' | id ' +

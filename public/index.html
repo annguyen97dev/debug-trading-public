@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Redis stream listener</title>
+    <style>
+      :root {
+        --bg: #0f1419;
+        --panel: #1a2332;
+        --border: #2d3a4f;
+        --text: #e7ecf3;
+        --muted: #8b9cb3;
+        --accent: #3d9cf5;
+        --ok: #34d399;
+        --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      header {
+        padding: 1rem 1.25rem;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel);
+      }
+      h1 {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 600;
+      }
+      .sub {
+        margin: 0.35rem 0 0;
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        margin-top: 0.75rem;
+        font-size: 0.8rem;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #f87171;
+      }
+      .dot.live {
+        background: var(--ok);
+        box-shadow: 0 0 8px var(--ok);
+      }
+      main {
+        padding: 1rem 1.25rem 2rem;
+        max-width: 960px;
+        margin: 0 auto;
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+      }
+      button {
+        background: var(--panel);
+        color: var(--text);
+        border: 1px solid var(--border);
+        padding: 0.45rem 0.85rem;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.85rem;
+      }
+      button:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      #log {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        min-height: 320px;
+        max-height: calc(100vh - 220px);
+        overflow: auto;
+        padding: 0.75rem;
+        font-family: var(--mono);
+        font-size: 12px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .entry {
+        border-bottom: 1px solid var(--border);
+        padding: 0.6rem 0;
+      }
+      .entry:last-child {
+        border-bottom: none;
+      }
+      .meta {
+        color: var(--muted);
+        margin-bottom: 0.35rem;
+      }
+      .json {
+        color: var(--accent);
+      }
+      .empty {
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Redis stream listener</h1>
+      <p class="sub">
+        Shows messages your trading engine publishes via
+        <code>xadd</code> (field <code>data</code>). Match
+        <code>STREAM_KEYS</code> to <code>KEY_STREAM.*</code>.
+        Reading does not remove entries from Redis; newest first.
+      </p>
+      <div class="status">
+        <span class="dot" id="dot" aria-hidden="true"></span>
+        <span id="statusText">Connecting…</span>
+      </div>
+    </header>
+    <main>
+      <div class="toolbar">
+        <button type="button" id="clear">Clear screen</button>
+      </div>
+      <div id="log"><div class="empty">Waiting for events…</div></div>
+    </main>
+    <script>
+      const logEl = document.getElementById('log')
+      const dot = document.getElementById('dot')
+      const statusText = document.getElementById('statusText')
+      document.getElementById('clear').addEventListener('click', () => {
+        logEl.innerHTML = '<div class="empty">Cleared.</div>'
+      })
+
+      function createMessageEntryEl(obj) {
+        const wrap = document.createElement('div')
+        wrap.className = 'entry'
+        wrap.dataset.streamId = obj.stream + ':' + obj.id
+
+        const meta = document.createElement('div')
+        meta.className = 'meta'
+        meta.textContent =
+          obj.receivedAt +
+          ' | ' +
+          obj.stream +
+          ' | id ' +
+          obj.id
+
+        const pre = document.createElement('pre')
+        pre.className = 'json'
+        pre.textContent = JSON.stringify(obj.data, null, 2)
+
+        wrap.appendChild(meta)
+        wrap.appendChild(pre)
+        return wrap
+      }
+
+      /** items: newest first → DOM: newest at top */
+      function renderHistory(items) {
+        logEl.innerHTML = ''
+        if (!items || items.length === 0) {
+          logEl.innerHTML =
+            '<div class="empty">No recent entries in stream (yet).</div>'
+          return
+        }
+        for (let i = items.length - 1; i >= 0; i--) {
+          logEl.insertBefore(
+            createMessageEntryEl(items[i]),
+            logEl.firstChild
+          )
+        }
+      }
+
+      function prependLiveMessage(obj) {
+        const empty = logEl.querySelector('.empty')
+        if (empty) empty.remove()
+
+        const key = obj.stream + ':' + obj.id
+        if (logEl.querySelector('[data-stream-id="' + key + '"]')) return
+
+        const wrap = createMessageEntryEl(obj)
+        logEl.insertBefore(wrap, logEl.firstChild)
+      }
+
+      function appendEntry(obj) {
+        if (obj.type === 'stream_message') {
+          prependLiveMessage(obj)
+        }
+      }
+
+      function connect() {
+        const es = new EventSource('/api/events')
+        es.onopen = () => {
+          dot.classList.add('live')
+          statusText.textContent = 'Live (SSE)'
+        }
+        es.onerror = () => {
+          dot.classList.remove('live')
+          statusText.textContent = 'Disconnected — retrying…'
+        }
+        es.onmessage = (ev) => {
+          try {
+            const obj = JSON.parse(ev.data)
+            if (obj.type === 'connected') {
+              statusText.textContent =
+                'Live — streams: ' + (obj.streams || []).join(', ')
+              return
+            }
+            if (obj.type === 'history') {
+              renderHistory(obj.items)
+              return
+            }
+            if (obj.type === 'history_error') {
+              logEl.innerHTML =
+                '<div class="empty">History load failed: ' +
+                (obj.message || 'unknown') +
+                '</div>'
+              return
+            }
+            appendEntry(obj)
+          } catch {
+            logEl.insertAdjacentHTML(
+              'afterbegin',
+              '<div class="entry"><pre class="json">' +
+                (ev.data || '') +
+                '</pre></div>'
+            )
+          }
+        }
+      }
+
+      connect()
+    </script>
+  </body>
+</html>

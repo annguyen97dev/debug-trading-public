@@ -42,11 +42,39 @@
         color: var(--muted);
         font-size: 0.85rem;
       }
+      .tabs {
+        display: inline-flex;
+        gap: 0.25rem;
+        margin-top: 0.75rem;
+        padding: 3px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+      }
+      .tabs button {
+        margin: 0;
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        padding: 0.35rem 0.9rem;
+        border-radius: 6px;
+        font-size: 0.8rem;
+        font-weight: 500;
+      }
+      .tabs button:hover {
+        color: var(--text);
+        border-color: transparent;
+      }
+      .tabs button[aria-selected='true'] {
+        background: var(--panel);
+        color: var(--accent);
+        box-shadow: 0 0 0 1px var(--border);
+      }
       .status {
         display: inline-flex;
         align-items: center;
         gap: 0.4rem;
-        margin-top: 0.75rem;
+        margin-top: 0.65rem;
         font-size: 0.8rem;
       }
       .dot {
@@ -147,6 +175,32 @@
         <code>STREAM_KEYS</code> to <code>KEY_STREAM.*</code>.
         Reading does not remove entries from Redis; newest first.
       </p>
+      <div
+        class="tabs"
+        role="tablist"
+        aria-label="Redis connection profile"
+      >
+        <button
+          type="button"
+          id="tabPc"
+          role="tab"
+          aria-selected="true"
+          aria-controls="log"
+          data-profile="pc"
+        >
+          PC
+        </button>
+        <button
+          type="button"
+          id="tabDemo"
+          role="tab"
+          aria-selected="false"
+          aria-controls="log"
+          data-profile="demo"
+        >
+          Demo
+        </button>
+      </div>
       <div class="status">
         <span class="dot" id="dot" aria-hidden="true"></span>
         <span id="statusText">Connecting…</span>
@@ -162,9 +216,29 @@
       const logEl = document.getElementById('log')
       const dot = document.getElementById('dot')
       const statusText = document.getElementById('statusText')
+      const tabPc = document.getElementById('tabPc')
+      const tabDemo = document.getElementById('tabDemo')
+      /** @type {EventSource | null} */
+      let activeEs = null
+      /** @type {'pc' | 'demo'} */
+      let activeProfile = 'pc'
+
       document.getElementById('clear').addEventListener('click', () => {
         logEl.innerHTML = '<div class="empty">Cleared.</div>'
       })
+
+      function setTabSelected(profile) {
+        const isPc = profile === 'pc'
+        tabPc.setAttribute('aria-selected', isPc ? 'true' : 'false')
+        tabDemo.setAttribute('aria-selected', isPc ? 'false' : 'true')
+      }
+
+      function disconnectSse() {
+        if (activeEs) {
+          activeEs.close()
+          activeEs = null
+        }
+      }
 
       /** ISO string → readable local time (hover meta for raw ISO). */
       function formatEventTime(iso) {
@@ -254,22 +328,52 @@
         }
       }
 
-      function connect() {
-        const es = new EventSource('/api/events')
+      /**
+       * @param {'pc' | 'demo'} profile
+       */
+      function connect(profile) {
+        disconnectSse()
+        activeProfile = profile
+        setTabSelected(profile)
+        dot.classList.remove('live')
+        statusText.textContent = 'Connecting…'
+        logEl.innerHTML = '<div class="empty">Waiting for events…</div>'
+
+        const es = new EventSource(
+          '/api/events?profile=' + encodeURIComponent(profile)
+        )
+        activeEs = es
         es.onopen = () => {
           dot.classList.add('live')
-          statusText.textContent = 'Live (SSE)'
+          statusText.textContent = 'Live (SSE) — ' + profile.toUpperCase()
         }
         es.onerror = () => {
           dot.classList.remove('live')
-          statusText.textContent = 'Disconnected — retrying…'
+          statusText.textContent =
+            'Disconnected — retrying… (' + profile.toUpperCase() + ')'
         }
         es.onmessage = (ev) => {
           try {
             const obj = JSON.parse(ev.data)
+            if (obj.type === 'config_error') {
+              if (activeEs === es) {
+                es.close()
+                activeEs = null
+              }
+              dot.classList.remove('live')
+              statusText.textContent = 'Not configured'
+              logEl.innerHTML =
+                '<div class="empty">' +
+                (obj.message || 'Missing Redis URL for this tab.') +
+                '</div>'
+              return
+            }
             if (obj.type === 'connected') {
               statusText.textContent =
-                'Live — streams: ' + (obj.streams || []).join(', ')
+                'Live — ' +
+                (obj.profile || profile).toUpperCase() +
+                ' — streams: ' +
+                (obj.streams || []).join(', ')
               return
             }
             if (obj.type === 'history') {
@@ -295,7 +399,15 @@
         }
       }
 
-      connect()
+      function onTabClick(profile) {
+        if (profile === activeProfile && activeEs) return
+        connect(profile)
+      }
+
+      tabPc.addEventListener('click', () => onTabClick('pc'))
+      tabDemo.addEventListener('click', () => onTabClick('demo'))
+
+      connect('pc')
     </script>
   </body>
 </html>

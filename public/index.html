@@ -188,7 +188,7 @@
           aria-controls="log"
           data-profile="pc"
         >
-          PC
+          TPM PC
         </button>
         <button
           type="button"
@@ -198,7 +198,7 @@
           aria-controls="log"
           data-profile="demo"
         >
-          Demo
+          TPM Demo
         </button>
         <button
           type="button"
@@ -264,28 +264,19 @@
       }
 
       /** ISO string → readable local time (hover meta for raw ISO). */
+      /** Local time as dd/mm/yyyy hh:mm:ss (24-hour). */
       function formatEventTime(iso) {
         if (!iso || typeof iso !== 'string') return String(iso ?? '')
         const d = new Date(iso)
         if (Number.isNaN(d.getTime())) return iso
-        try {
-          return new Intl.DateTimeFormat(undefined, {
-            weekday: 'short',
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            fractionalSecondDigits: 3,
-            timeZoneName: 'short'
-          }).format(d)
-        } catch {
-          return d.toLocaleString(undefined, {
-            dateStyle: 'medium',
-            timeStyle: 'medium'
-          })
-        }
+        const pad = (n) => String(n).padStart(2, '0')
+        const dd = pad(d.getDate())
+        const mm = pad(d.getMonth() + 1)
+        const yyyy = d.getFullYear()
+        const hh = pad(d.getHours())
+        const mi = pad(d.getMinutes())
+        const ss = pad(d.getSeconds())
+        return dd + '/' + mm + '/' + yyyy + ' ' + hh + ':' + mi + ':' + ss
       }
 
       function createMessageEntryEl(obj) {

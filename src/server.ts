@@ -86,7 +86,7 @@ async function fetchRecentAcrossStreams (
 
 type SseClient = { res: express.Response }
 
-type RedisProfile = 'pc' | 'demo'
+type RedisProfile = 'pc' | 'demo' | 'bnb_demo'
 
 type ProfileRuntime = {
   profile: RedisProfile
@@ -111,17 +111,27 @@ function maskRedisUrl (url: string): string {
 
 function parseProfileQuery (q: unknown): RedisProfile {
   if (typeof q !== 'string') return 'pc'
-  const s = q.toLowerCase()
-  return s === 'demo' ? 'demo' : 'pc'
+  const s = q.toLowerCase().replace(/-/g, '_')
+  if (s === 'demo') return 'demo'
+  if (s === 'bnb_demo') return 'bnb_demo'
+  return 'pc'
 }
 
 function envUrlForProfile (profile: RedisProfile): string | undefined {
   const raw =
     profile === 'pc'
       ? process.env.TPM_PC_REDIS_URL
-      : process.env.TPM_DEMO_REDIS_URL
+      : profile === 'demo'
+        ? process.env.TPM_DEMO_REDIS_URL
+        : process.env.BNB_DEMO_REDIS_URL
   const t = raw?.trim()
   return t === '' ? undefined : t
+}
+
+function profileEnvVarName (profile: RedisProfile): string {
+  if (profile === 'pc') return 'TPM_PC_REDIS_URL'
+  if (profile === 'demo') return 'TPM_DEMO_REDIS_URL'
+  return 'BNB_DEMO_REDIS_URL'
 }
 
 function broadcast (
@@ -189,7 +199,7 @@ async function run (): Promise<void> {
     enableReadyCheck: true
   } as const
 
-  const profileOrder: RedisProfile[] = ['pc', 'demo']
+  const profileOrder: RedisProfile[] = ['pc', 'demo', 'bnb_demo']
   const runtimes = new Map<RedisProfile, ProfileRuntime>()
 
   for (const profile of profileOrder) {
@@ -229,7 +239,8 @@ async function run (): Promise<void> {
       streams: streamKeys,
       profiles: {
         pc: envUrlForProfile('pc') !== undefined,
-        demo: envUrlForProfile('demo') !== undefined
+        demo: envUrlForProfile('demo') !== undefined,
+        bnb_demo: envUrlForProfile('bnb_demo') !== undefined
       }
     })
   })
@@ -244,8 +255,7 @@ async function run (): Promise<void> {
     res.flushHeaders()
 
     if (rt === undefined) {
-      const envName =
-        profile === 'pc' ? 'TPM_PC_REDIS_URL' : 'TPM_DEMO_REDIS_URL'
+      const envName = profileEnvVarName(profile)
       res.write(
         `data: ${JSON.stringify({
           type: 'config_error',

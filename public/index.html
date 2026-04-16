@@ -200,6 +200,16 @@
         >
           Demo
         </button>
+        <button
+          type="button"
+          id="tabBnbDemo"
+          role="tab"
+          aria-selected="false"
+          aria-controls="log"
+          data-profile="bnb_demo"
+        >
+          BNB Demo
+        </button>
       </div>
       <div class="status">
         <span class="dot" id="dot" aria-hidden="true"></span>
@@ -216,21 +226,34 @@
       const logEl = document.getElementById('log')
       const dot = document.getElementById('dot')
       const statusText = document.getElementById('statusText')
-      const tabPc = document.getElementById('tabPc')
-      const tabDemo = document.getElementById('tabDemo')
+      const tablist = document.querySelector('[role="tablist"]')
+      const tabButtons = document.querySelectorAll('[role="tab"][data-profile]')
+      /** @type {Record<string, string>} */
+      const PROFILE_LABEL = {
+        pc: 'PC',
+        demo: 'Demo',
+        bnb_demo: 'BNB Demo'
+      }
       /** @type {EventSource | null} */
       let activeEs = null
-      /** @type {'pc' | 'demo'} */
+      /** @type {string} */
       let activeProfile = 'pc'
 
       document.getElementById('clear').addEventListener('click', () => {
         logEl.innerHTML = '<div class="empty">Cleared.</div>'
       })
 
+      function profileStatusLabel(profile) {
+        return PROFILE_LABEL[profile] || profile
+      }
+
       function setTabSelected(profile) {
-        const isPc = profile === 'pc'
-        tabPc.setAttribute('aria-selected', isPc ? 'true' : 'false')
-        tabDemo.setAttribute('aria-selected', isPc ? 'false' : 'true')
+        tabButtons.forEach((btn) => {
+          btn.setAttribute(
+            'aria-selected',
+            btn.dataset.profile === profile ? 'true' : 'false'
+          )
+        })
       }
 
       function disconnectSse() {
@@ -329,7 +352,7 @@
       }
 
       /**
-       * @param {'pc' | 'demo'} profile
+       * @param {string} profile
        */
       function connect(profile) {
         disconnectSse()
@@ -343,14 +366,14 @@
           '/api/events?profile=' + encodeURIComponent(profile)
         )
         activeEs = es
+        const label = profileStatusLabel(profile)
         es.onopen = () => {
           dot.classList.add('live')
-          statusText.textContent = 'Live (SSE) — ' + profile.toUpperCase()
+          statusText.textContent = 'Live (SSE) — ' + label
         }
         es.onerror = () => {
           dot.classList.remove('live')
-          statusText.textContent =
-            'Disconnected — retrying… (' + profile.toUpperCase() + ')'
+          statusText.textContent = 'Disconnected — retrying… (' + label + ')'
         }
         es.onmessage = (ev) => {
           try {
@@ -369,9 +392,10 @@
               return
             }
             if (obj.type === 'connected') {
+              const p = obj.profile || profile
               statusText.textContent =
                 'Live — ' +
-                (obj.profile || profile).toUpperCase() +
+                profileStatusLabel(p) +
                 ' — streams: ' +
                 (obj.streams || []).join(', ')
               return
@@ -404,8 +428,12 @@
         connect(profile)
       }
 
-      tabPc.addEventListener('click', () => onTabClick('pc'))
-      tabDemo.addEventListener('click', () => onTabClick('demo'))
+      tablist.addEventListener('click', (e) => {
+        const btn = e.target && e.target.closest('[data-profile]')
+        if (!btn || !tablist.contains(btn)) return
+        const p = btn.dataset.profile
+        if (p) onTabClick(p)
+      })
 
       connect('pc')
     </script>

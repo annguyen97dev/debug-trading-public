@@ -210,6 +210,16 @@
         >
           BNB Demo
         </button>
+        <button
+          type="button"
+          id="tabBnbStaging"
+          role="tab"
+          aria-selected="false"
+          aria-controls="log"
+          data-profile="bnb_staging"
+        >
+          BNB staging
+        </button>
       </div>
       <div class="status">
         <span class="dot" id="dot" aria-hidden="true"></span>
@@ -232,7 +242,8 @@
       const PROFILE_LABEL = {
         pc: 'TPM PC',
         demo: 'TPM Demo',
-        bnb_demo: 'BNB Demo'
+        bnb_demo: 'BNB Demo',
+        bnb_staging: 'BNB staging'
       }
       /** @type {EventSource | null} */
       let activeEs = null

@@ -86,7 +86,7 @@ async function fetchRecentAcrossStreams (
 
 type SseClient = { res: express.Response }
 
-type RedisProfile = 'pc' | 'demo' | 'bnb_demo'
+type RedisProfile = 'pc' | 'demo' | 'bnb_demo' | 'bnb_staging'
 
 type ProfileRuntime = {
   profile: RedisProfile
@@ -114,6 +114,7 @@ function parseProfileQuery (q: unknown): RedisProfile {
   const s = q.toLowerCase().replace(/-/g, '_')
   if (s === 'demo') return 'demo'
   if (s === 'bnb_demo') return 'bnb_demo'
+  if (s === 'bnb_staging') return 'bnb_staging'
   return 'pc'
 }
 
@@ -123,7 +124,9 @@ function envUrlForProfile (profile: RedisProfile): string | undefined {
       ? process.env.TPM_PC_REDIS_URL
       : profile === 'demo'
         ? process.env.TPM_DEMO_REDIS_URL
-        : process.env.BNB_DEMO_REDIS_URL
+        : profile === 'bnb_demo'
+          ? process.env.BNB_DEMO_REDIS_URL
+          : process.env.BNB_STAGING_REDIS_URL
   const t = raw?.trim()
   return t === '' ? undefined : t
 }
@@ -131,7 +134,8 @@ function envUrlForProfile (profile: RedisProfile): string | undefined {
 function profileEnvVarName (profile: RedisProfile): string {
   if (profile === 'pc') return 'TPM_PC_REDIS_URL'
   if (profile === 'demo') return 'TPM_DEMO_REDIS_URL'
-  return 'BNB_DEMO_REDIS_URL'
+  if (profile === 'bnb_demo') return 'BNB_DEMO_REDIS_URL'
+  return 'BNB_STAGING_REDIS_URL'
 }
 
 function broadcast (
@@ -199,7 +203,7 @@ async function run (): Promise<void> {
     enableReadyCheck: true
   } as const
 
-  const profileOrder: RedisProfile[] = ['pc', 'demo', 'bnb_demo']
+  const profileOrder: RedisProfile[] = ['pc', 'demo', 'bnb_demo', 'bnb_staging']
   const runtimes = new Map<RedisProfile, ProfileRuntime>()
 
   for (const profile of profileOrder) {
@@ -240,7 +244,8 @@ async function run (): Promise<void> {
       profiles: {
         pc: envUrlForProfile('pc') !== undefined,
         demo: envUrlForProfile('demo') !== undefined,
-        bnb_demo: envUrlForProfile('bnb_demo') !== undefined
+        bnb_demo: envUrlForProfile('bnb_demo') !== undefined,
+        bnb_staging: envUrlForProfile('bnb_staging') !== undefined
       }
     })
   })

@@ -182,6 +182,16 @@
       >
         <button
           type="button"
+          id="tabZionMain"
+          role="tab"
+          aria-selected="false"
+          aria-controls="log"
+          data-profile="zion_main"
+        >
+          Zion Main
+        </button>
+        <button
+          type="button"
           id="tabPc"
           role="tab"
           aria-selected="true"
@@ -232,7 +242,8 @@
       const PROFILE_LABEL = {
         pc: 'TPM PC',
         demo: 'TPM Demo',
-        bnb_demo: 'BNB Demo'
+        bnb_demo: 'BNB Demo',
+        zion_main: 'Zion Main'
       }
       /** @type {EventSource | null} */
       let activeEs = null

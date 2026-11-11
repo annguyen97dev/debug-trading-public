@@ -86,7 +86,14 @@ async function fetchRecentAcrossStreams (
 
 type SseClient = { res: express.Response }
 
-type RedisProfile = 'pc' | 'demo' | 'bnb_demo'
+type RedisProfile = 'pc' | 'demo' | 'bnb_demo' | 'zion_main'
+
+const PROFILE_ENV: Record<RedisProfile, string> = {
+  pc: 'TPM_PC_REDIS_URL',
+  demo: 'TPM_DEMO_REDIS_URL',
+  bnb_demo: 'BNB_DEMO_REDIS_URL',
+  zion_main: 'ZION_ARB_MAIN_URL'
+}
 
 type ProfileRuntime = {
   profile: RedisProfile
@@ -114,24 +121,18 @@ function parseProfileQuery (q: unknown): RedisProfile {
   const s = q.toLowerCase().replace(/-/g, '_')
   if (s === 'demo') return 'demo'
   if (s === 'bnb_demo') return 'bnb_demo'
+  if (s === 'zion_main') return 'zion_main'
   return 'pc'
 }
 
 function envUrlForProfile (profile: RedisProfile): string | undefined {
-  const raw =
-    profile === 'pc'
-      ? process.env.TPM_PC_REDIS_URL
-      : profile === 'demo'
-        ? process.env.TPM_DEMO_REDIS_URL
-        : process.env.BNB_DEMO_REDIS_URL
+  const raw = process.env[PROFILE_ENV[profile]]
   const t = raw?.trim()
   return t === '' ? undefined : t
 }
 
 function profileEnvVarName (profile: RedisProfile): string {
-  if (profile === 'pc') return 'TPM_PC_REDIS_URL'
-  if (profile === 'demo') return 'TPM_DEMO_REDIS_URL'
-  return 'BNB_DEMO_REDIS_URL'
+  return PROFILE_ENV[profile]
 }
 
 function broadcast (
@@ -199,7 +200,7 @@ async function run (): Promise<void> {
     enableReadyCheck: true
   } as const
 
-  const profileOrder: RedisProfile[] = ['pc', 'demo', 'bnb_demo']
+  const profileOrder: RedisProfile[] = ['pc', 'demo', 'bnb_demo', 'zion_main']
   const runtimes = new Map<RedisProfile, ProfileRuntime>()
 
   for (const profile of profileOrder) {
@@ -240,7 +241,8 @@ async function run (): Promise<void> {
       profiles: {
         pc: envUrlForProfile('pc') !== undefined,
         demo: envUrlForProfile('demo') !== undefined,
-        bnb_demo: envUrlForProfile('bnb_demo') !== undefined
+        bnb_demo: envUrlForProfile('bnb_demo') !== undefined,
+        zion_main: envUrlForProfile('zion_main') !== undefined
       }
     })
   })

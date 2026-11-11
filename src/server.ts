@@ -86,13 +86,14 @@ async function fetchRecentAcrossStreams (
 
 type SseClient = { res: express.Response }
 
-type RedisProfile = 'pc' | 'demo' | 'bnb_demo' | 'zion_main'
+type RedisProfile = 'pc' | 'demo' | 'bnb_demo' | 'zion_main' | 'bnb_staging'
 
 const PROFILE_ENV: Record<RedisProfile, string> = {
   pc: 'TPM_PC_REDIS_URL',
   demo: 'TPM_DEMO_REDIS_URL',
   bnb_demo: 'BNB_DEMO_REDIS_URL',
-  zion_main: 'ZION_ARB_MAIN_URL'
+  zion_main: 'ZION_ARB_MAIN_URL',
+  bnb_staging: 'BNB_STAGING_REDIS_URL'
 }
 
 type ProfileRuntime = {
@@ -122,17 +123,32 @@ function parseProfileQuery (q: unknown): RedisProfile {
   if (s === 'demo') return 'demo'
   if (s === 'bnb_demo') return 'bnb_demo'
   if (s === 'zion_main') return 'zion_main'
+  if (s === 'bnb_staging') return 'bnb_staging'
   return 'pc'
 }
 
 function envUrlForProfile (profile: RedisProfile): string | undefined {
-  const raw = process.env[PROFILE_ENV[profile]]
+
+  const raw =
+    profile === 'pc'
+      ? process.env.TPM_PC_REDIS_URL
+      : profile === 'demo'
+        ? process.env.TPM_DEMO_REDIS_URL
+        : profile === 'bnb_demo'
+          ? process.env.BNB_DEMO_REDIS_URL
+          : profile === 'bnb_staging'
+            ? process.env.BNB_STAGING_REDIS_URL
+            : process.env.ZION_ARB_MAIN_URL
   const t = raw?.trim()
   return t === '' ? undefined : t
 }
 
 function profileEnvVarName (profile: RedisProfile): string {
   return PROFILE_ENV[profile]
+  if (profile === 'pc') return 'TPM_PC_REDIS_URL'
+  if (profile === 'demo') return 'TPM_DEMO_REDIS_URL'
+  if (profile === 'bnb_demo') return 'BNB_DEMO_REDIS_URL'
+  return 'BNB_STAGING_REDIS_URL'
 }
 
 function broadcast (
@@ -200,7 +216,7 @@ async function run (): Promise<void> {
     enableReadyCheck: true
   } as const
 
-  const profileOrder: RedisProfile[] = ['pc', 'demo', 'bnb_demo', 'zion_main']
+  const profileOrder: RedisProfile[] = ['pc', 'demo', 'bnb_demo', 'zion_main', 'bnb_staging']
   const runtimes = new Map<RedisProfile, ProfileRuntime>()
 
   for (const profile of profileOrder) {
@@ -242,7 +258,8 @@ async function run (): Promise<void> {
         pc: envUrlForProfile('pc') !== undefined,
         demo: envUrlForProfile('demo') !== undefined,
         bnb_demo: envUrlForProfile('bnb_demo') !== undefined,
-        zion_main: envUrlForProfile('zion_main') !== undefined
+        zion_main: envUrlForProfile('zion_main') !== undefined,
+        bnb_staging: envUrlForProfile('bnb_staging') !== undefined
       }
     })
   })
